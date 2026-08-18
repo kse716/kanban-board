@@ -1,0 +1,9 @@
+{
+  "name": "kanban-board",
+  "version": "0.1.0",
+  "private": true,
+  "proxy": "http://localhost:8080",
+  "dependencies": {
+    "react-router-dom": "^7.18.2"
+  }
+}
