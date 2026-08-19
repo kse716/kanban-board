@@ -47,4 +47,10 @@ public class TaskController {
     public void delete(@PathVariable Long id) {
         taskService.delete(id);
     }
+
+    @PutMapping("/reorder")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reorder(@RequestBody List<TaskOrderRequest> requests) {
+        taskService.reorder(requests);
+    }
 }

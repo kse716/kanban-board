@@ -9,6 +9,7 @@ const namedColors = {
 const resolveColor = color => namedColors[color] || color || '#315bea';
 
 function ProjectSidebar({
+    user,
     projects,
     selectedProjectId,
     onSelect,
@@ -23,6 +24,8 @@ function ProjectSidebar({
     const [editingId, setEditingId] = useState(null);
     const [editingName, setEditingName] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
+    const userName = user?.name || '사용자';
+    const userId = user?.id || 'ID 미지정';
 
     const toggleSidebar = () => {
         if (!collapsed) {
@@ -76,8 +79,13 @@ function ProjectSidebar({
     return (
         <aside className={`project-sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-brand">
-                <span className="sidebar-brand-mark">F</span>
-                <div className="sidebar-brand-copy"><strong>Flow</strong><small>Project workspace</small></div>
+                <span className="sidebar-brand-mark" aria-hidden="true">
+                    {userName.charAt(0).toUpperCase()}
+                </span>
+                <div className="sidebar-brand-copy">
+                    <strong title={userName}>{userName}</strong>
+                    <small title={String(userId)}>{userId}</small>
+                </div>
                 <button
                     className="sidebar-toggle"
                     type="button"

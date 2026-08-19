@@ -128,4 +128,16 @@ public class TaskService {
                         "프로젝트를 찾을 수 없습니다: " + projectId
                 ));
     }
+
+    @Transactional
+    public void reorder(List<TaskOrderRequest> requests) {
+        for (TaskOrderRequest request : requests) {
+            Task task = taskRepository.findById(request.id())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "작업을 찾을 수 없습니다." + request.id()
+                            ));
+            task.setStatus(request.status());
+            task.setPosition(request.position());
+        }
+    }
 }

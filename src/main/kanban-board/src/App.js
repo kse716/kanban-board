@@ -91,6 +91,12 @@ const defaultTags = [
 
 const projectColors = ['#315bea', '#8b74e8', '#38a878', '#e8904f'];
 
+// 실제 로그인 API가 연결되면 /api/users/me 응답으로 교체합니다.
+const currentUser = {
+    id: 'user-001',
+    name: '사용자'
+};
+
 const createEmptyForm = (column = 'todo') => ({
     title: '',
     description: '',
@@ -226,6 +232,108 @@ function TagMenuList(props) {
 }
 
 function App() {
+
+    const reorderTasks = (
+        currentTasks,
+        sourceTaskId,
+        targetColumn,
+        targetTaskId = null,
+        dropPosition = 'after'
+    ) => {
+        const draggedTask = currentTasks.find(
+            task => task.id === sourceTaskId
+        );
+
+        if (!draggedTask) {
+            return currentTasks;
+        }
+
+        const remainingTasks = currentTasks.filter(
+            task => task.id !== sourceTaskId
+        );
+
+        const movedTask = {
+            ...draggedTask,
+            column: targetColumn
+        };
+
+        let nextTasks;
+
+        // 칼럼의 빈 공간에 놓은 경우
+        if (targetTaskId === null) {
+            const targetIndexes = remainingTasks
+                .map((task, index) => ({
+                    task,
+                    index
+                }))
+                .filter(
+                    item =>
+                        item.task.column === targetColumn
+                );
+
+            if (targetIndexes.length === 0) {
+                nextTasks = [
+                    ...remainingTasks,
+                    movedTask
+                ];
+            } else {
+                const lastIndex =
+                    targetIndexes[
+                    targetIndexes.length - 1
+                        ].index;
+
+                nextTasks = [...remainingTasks];
+
+                nextTasks.splice(
+                    lastIndex + 1,
+                    0,
+                    movedTask
+                );
+            }
+        } else {
+            // 특정 카드의 위 또는 아래에 놓은 경우
+            const targetIndex =
+                remainingTasks.findIndex(
+                    task => task.id === targetTaskId
+                );
+
+            if (targetIndex === -1) {
+                nextTasks = [
+                    ...remainingTasks,
+                    movedTask
+                ];
+            } else {
+                const insertIndex =
+                    dropPosition === 'before'
+                        ? targetIndex
+                        : targetIndex + 1;
+
+                nextTasks = [...remainingTasks];
+
+                nextTasks.splice(
+                    insertIndex,
+                    0,
+                    movedTask
+                );
+            }
+        }
+
+        // 각 칼럼의 position을 0부터 다시 계산
+        const columnPositions = {
+            todo: 0,
+            progress: 0,
+            review: 0,
+            done: 0
+        };
+
+        return nextTasks.map(task => ({
+            ...task,
+            position:
+                columnPositions[task.column]++
+        }));
+    };
+
+
     const [page, setPage] = useState(
         window.location.pathname
     );
@@ -254,6 +362,9 @@ function App() {
     const [isSortOpen, setSortOpen] = useState(false);
 
     const [draggedId, setDraggedId] = useState(null);
+    const draggedIdRef = useRef(null);  //현재 잡은 카드
+    const dragStartPointRef = useRef(null);  //처음 누른 위치
+    const didDragRef = useRef(null);  //단순 클릭인지 실제 드래그인지 구분
 
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingTaskId, setEditingTaskId] =
@@ -463,6 +574,44 @@ function App() {
             JSON.stringify(collapsedTaskIds)
         );
     }, [collapsedTaskIds]);
+
+    useEffect(() => {
+        const clearDragging = () => {
+            setDraggedId(null);
+        };
+
+        const clearDraggingOnEscape = event => {
+            if (event.key === 'Escape') {
+                clearDragging();
+            }
+        };
+
+        const clearDraggingWhenHidden = () => {
+            if (document.hidden) {
+                clearDragging();
+            }
+        };
+
+        window.addEventListener('dragend', clearDragging, true);
+        window.addEventListener('drop', clearDragging, true);
+        window.addEventListener('blur', clearDragging);
+        window.addEventListener('keydown', clearDraggingOnEscape);
+        document.addEventListener(
+            'visibilitychange',
+            clearDraggingWhenHidden
+        );
+
+        return () => {
+            window.removeEventListener('dragend', clearDragging, true);
+            window.removeEventListener('drop', clearDragging, true);
+            window.removeEventListener('blur', clearDragging);
+            window.removeEventListener('keydown', clearDraggingOnEscape);
+            document.removeEventListener(
+                'visibilitychange',
+                clearDraggingWhenHidden
+            );
+        };
+    }, []);
 
     const navigateTo = path => {
         window.history.pushState({}, '', path);
@@ -918,115 +1067,195 @@ function App() {
         }
     };
 
-    const moveTask = (
+    const moveTask = async (
         targetColumn,
         targetTaskId = null,
-        position = 'after'
+        dropPosition = 'after'
     ) => {
-        if (draggedId === null) {
+        const sourceTaskId =
+            draggedIdRef.current;
+
+        if (sourceTaskId === null) {
             return;
         }
 
-        setTasks(currentTasks => {
-            const draggedTask =
-                currentTasks.find(
-                    task =>
-                        task.id === draggedId
+        const previousTasks = tasks;
+
+        const nextTasks = reorderTasks(
+            tasks,
+            sourceTaskId,
+            targetColumn,
+            targetTaskId,
+            dropPosition
+        );
+
+        setTasks(nextTasks);
+        setDraggedId(null);
+
+        try {
+            await saveTaskOrder(nextTasks);
+        } catch (error) {
+            console.error(error);
+            setTasks(previousTasks);
+
+            window.alert(
+                '작업 이동을 저장하지 못했습니다.'
+            );
+        }
+    };
+
+    const startPointerDrag = (event, taskId) => {
+        if (
+            event.button !== 0 ||
+            sortBy !== 'manual' ||
+            event.target.closest('button, input, textarea, select, a')
+        ) {
+            return;
+        }
+
+        draggedIdRef.current = taskId;
+        dragStartPointRef.current = {
+            x: event.clientX,
+            y: event.clientY
+        };
+        didDragRef.current = false;
+
+        event.currentTarget.setPointerCapture(
+            event.pointerId
+        );
+    };
+
+    const updatePointerDrag = event => {
+        if (
+            draggedIdRef.current === null ||
+            !dragStartPointRef.current
+        ) {
+            return;
+        }
+
+        const distanceX =
+            event.clientX -
+            dragStartPointRef.current.x;
+
+        const distanceY =
+            event.clientY -
+            dragStartPointRef.current.y;
+
+        const distance = Math.hypot(
+            distanceX,
+            distanceY
+        );
+
+        if (
+            !didDragRef.current &&
+            distance >= 5
+        ) {
+            didDragRef.current = true;
+            setDraggedId(
+                draggedIdRef.current
+            );
+        }
+    };
+
+    const finishPointerDrag = event => {
+        const sourceTaskId =
+            draggedIdRef.current;
+
+        if (
+            sourceTaskId === null ||
+            !didDragRef.current
+        ) {
+            draggedIdRef.current = null;
+            dragStartPointRef.current = null;
+            setDraggedId(null);
+            return;
+        }
+
+        const columnElements = [
+            ...document.querySelectorAll(
+                '[data-column-id]'
+            )
+        ];
+
+        const targetColumn =
+            columnElements.find(element => {
+                const rect =
+                    element.getBoundingClientRect();
+
+                return (
+                    event.clientX >= rect.left &&
+                    event.clientX <= rect.right &&
+                    event.clientY >= rect.top &&
+                    event.clientY <= rect.bottom
+                );
+            });
+
+        if (targetColumn) {
+            const columnId =
+                targetColumn.dataset.columnId;
+
+            const targetCard = [
+                ...targetColumn.querySelectorAll(
+                    '[data-task-id]'
+                )
+            ].find(element => {
+                const targetTaskId = Number(
+                    element.dataset.taskId
                 );
 
-            if (!draggedTask) {
-                return currentTasks;
-            }
-
-            const remainingTasks =
-                currentTasks.filter(
-                    task =>
-                        task.id !== draggedId
-                );
-
-            const movedTask = {
-                ...draggedTask,
-                column: targetColumn
-            };
-
-            if (targetTaskId === null) {
-                const targetIndexes =
-                    remainingTasks
-                        .map((task, index) => ({
-                            task,
-                            index
-                        }))
-                        .filter(
-                            item =>
-                                item.task.column ===
-                                targetColumn
-                        );
-
-                if (
-                    targetIndexes.length === 0
-                ) {
-                    return [
-                        ...remainingTasks,
-                        movedTask
-                    ];
+                if (targetTaskId === sourceTaskId) {
+                    return false;
                 }
 
-                const lastIndex =
-                    targetIndexes[
-                    targetIndexes.length - 1
-                        ].index;
+                const rect =
+                    element.getBoundingClientRect();
 
-                const nextTasks = [
-                    ...remainingTasks
-                ];
+                return (
+                    event.clientY >= rect.top &&
+                    event.clientY <= rect.bottom
+                );
+            });
 
-                nextTasks.splice(
-                    lastIndex + 1,
-                    0,
-                    movedTask
+            if (targetCard) {
+                const targetTaskId = Number(
+                    targetCard.dataset.taskId
                 );
 
-                return nextTasks;
-            }
+                const rect =
+                    targetCard.getBoundingClientRect();
 
-            const targetIndex =
-                remainingTasks.findIndex(
-                    task =>
-                        task.id ===
-                        targetTaskId
+                const position =
+                    event.clientY <
+                    rect.top + rect.height / 2
+                        ? 'before'
+                        : 'after';
+
+                moveTask(
+                    columnId,
+                    targetTaskId,
+                    position
                 );
-
-            if (targetIndex === -1) {
-                return [
-                    ...remainingTasks,
-                    movedTask
-                ];
+            } else {
+                moveTask(columnId);
             }
+        }
 
-            const insertIndex =
-                position === 'before'
-                    ? targetIndex
-                    : targetIndex + 1;
+        draggedIdRef.current = null;
+        dragStartPointRef.current = null;
+        setDraggedId(null);
 
-            const nextTasks = [
-                ...remainingTasks
-            ];
+        window.setTimeout(() => {
+            didDragRef.current = false;
+        }, 0);
+    };
 
-            nextTasks.splice(
-                insertIndex,
-                0,
-                movedTask
-            );
-
-            return nextTasks;
-        });
-
+    const cancelPointerDrag = () => {
+        draggedIdRef.current = null;
+        dragStartPointRef.current = null;
+        didDragRef.current = false;
         setDraggedId(null);
     };
 
-    const finishDragging = () => {
-        setDraggedId(null);
-    };
 
     const toggleTaskCollapsed = taskId => {
         setCollapsedTaskIds(current =>
@@ -1377,9 +1606,43 @@ function App() {
         );
     }
 
+    const createOrderRequests = nextTasks => {
+        const positions = {
+            todo: 0,
+            progress: 0,
+            review: 0,
+            done: 0
+        };
+
+        return nextTasks.map(task => ({
+            id: task.id,
+            status: task.column.toUpperCase(),
+            position: positions[task.column]++
+        }));
+    };
+
+    const saveTaskOrder = async nextTasks => {
+        const response = await fetch('/api/tasks/reorder', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(
+                createOrderRequests(nextTasks)
+            )
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `작업 순서 저장 실패: ${response.status}`
+            );
+        }
+    };
+
     return (
         <div className={`app-shell ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
             <ProjectSidebar
+                user={currentUser}
                 projects={projects}
                 selectedProjectId={selectedProjectId}
                 onSelect={selectProject}
@@ -1712,18 +1975,9 @@ function App() {
                         return (
                             <section
                                 className="column"
+                                data-column-id={column.id}
                                 key={column.id}
-                                onDragOver={
-                                    event =>
-                                        event.preventDefault()
-                                }
-                                onDrop={event => {
-                                    event.preventDefault();
 
-                                    moveTask(
-                                        column.id
-                                    );
-                                }}
                             >
                                 <div className="column-header">
                                     <div>
@@ -1775,89 +2029,106 @@ function App() {
 
                                         return (
                                             <article
-                                                key={
-                                                    task.id
+                                                key={task.id}
+                                                data-task-id={task.id}
+                                                //네이티브 드래그 코드 제거
+                                                // draggable={sortBy === 'manual'}
+                                                className={`task-card ${draggedId === task.id ? 'dragging' : ''
+                                                } ${isCollapsed ? 'collapsed' : ''}`}
+
+                                                // onClick={() => {
+                                                //     if (
+                                                //         draggedId ===
+                                                //         null
+                                                //     ) {
+                                                //         openEditModal(
+                                                //             task
+                                                //         );
+                                                //     }
+                                                // }}
+                                                // onDragStart={
+                                                //     event => {
+                                                //         setDraggedId(
+                                                //             task.id
+                                                //         );
+                                                //
+                                                //         event.dataTransfer.effectAllowed =
+                                                //             'move';
+                                                //
+                                                //         event.dataTransfer.setData(
+                                                //             'text/plain',
+                                                //             String(
+                                                //                 task.id
+                                                //             )
+                                                //         );
+                                                //     }
+                                                // }
+                                                // onDragOver={
+                                                //     event => {
+                                                //         event.preventDefault();
+                                                //         event.stopPropagation();
+                                                //     }
+                                                // }
+                                                // onDrop={
+                                                //     event => {
+                                                //         event.preventDefault();
+                                                //         event.stopPropagation();
+                                                //
+                                                //         if (
+                                                //             task.id ===
+                                                //             draggedId
+                                                //         ) {
+                                                //             finishDragging();
+                                                //             return;
+                                                //         }
+                                                //
+                                                //         const cardRect =
+                                                //             event.currentTarget.getBoundingClientRect();
+                                                //
+                                                //         const cardMiddle =
+                                                //             cardRect.top +
+                                                //             cardRect.height /
+                                                //             2;
+                                                //
+                                                //         const dropPosition =
+                                                //             event.clientY <
+                                                //             cardMiddle
+                                                //                 ? 'before'
+                                                //                 : 'after';
+                                                //
+                                                //         moveTask(
+                                                //             column.id,
+                                                //             task.id,
+                                                //             dropPosition
+                                                //         );
+                                                //     }
+                                                // }
+                                                // onDragEnd={
+                                                //     finishDragging
+                                                // }
+                                                onPointerDown={event =>
+                                                    startPointerDrag(
+                                                        event,
+                                                        task.id
+                                                    )
                                                 }
-                                                draggable
-                                                className={`task-card ${
-                                                    isCollapsed
-                                                        ? 'collapsed'
-                                                        : ''
-                                                }`}
+                                                onPointerMove={
+                                                    updatePointerDrag
+                                                }
+                                                onPointerUp={
+                                                    finishPointerDrag
+                                                }
+                                                onPointerCancel={
+                                                    cancelPointerDrag
+                                                }
                                                 onClick={() => {
-                                                    if (
-                                                        draggedId ===
-                                                        null
-                                                    ) {
-                                                        openEditModal(
-                                                            task
-                                                        );
+                                                    if (didDragRef.current) {
+                                                        didDragRef.current = false;
+                                                        return;
                                                     }
+
+                                                    openEditModal(task);
                                                 }}
-                                                onDragStart={
-                                                    event => {
-                                                        setSortBy(
-                                                            'manual'
-                                                        );
-
-                                                        setDraggedId(
-                                                            task.id
-                                                        );
-
-                                                        event.dataTransfer.effectAllowed =
-                                                            'move';
-
-                                                        event.dataTransfer.setData(
-                                                            'text/plain',
-                                                            String(
-                                                                task.id
-                                                            )
-                                                        );
-                                                    }
-                                                }
-                                                onDragOver={
-                                                    event => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                    }
-                                                }
-                                                onDrop={
-                                                    event => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-
-                                                        if (
-                                                            task.id ===
-                                                            draggedId
-                                                        ) {
-                                                            finishDragging();
-                                                            return;
-                                                        }
-
-                                                        const cardRect =
-                                                            event.currentTarget.getBoundingClientRect();
-
-                                                        const cardMiddle =
-                                                            cardRect.top +
-                                                            cardRect.height /
-                                                            2;
-
-                                                        const dropPosition =
-                                                            event.clientY <
-                                                            cardMiddle
-                                                                ? 'before'
-                                                                : 'after';
-
-                                                        moveTask(
-                                                            column.id,
-                                                            task.id,
-                                                            dropPosition
-                                                        );
-                                                    }
-                                                }
-                                                onDragEnd={
-                                                    finishDragging
-                                                }
                                             >
                                                 <div className="card-top">
                                                     <div className="task-tags">
