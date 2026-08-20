@@ -77,7 +77,7 @@ function ProjectSidebar({
     };
 
     return (
-        <aside className={`project-sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <aside id="project-sidebar" className={`project-sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-brand">
                 <span className="sidebar-brand-mark" aria-hidden="true">
                     {userName.charAt(0).toUpperCase()}
@@ -167,7 +167,6 @@ function ProjectSidebar({
             </nav>
 
             {projects.length === 0 && <p className="project-empty-message">프로젝트를 만들어 작업을 시작하세요.</p>}
-            <div className="sidebar-help">프로젝트를 선택하면 해당 작업만 표시됩니다.</div>
         </aside>
     );
 }

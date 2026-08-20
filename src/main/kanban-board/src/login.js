@@ -1,7 +1,7 @@
 import React from 'react';
 import './App.css';
 
-function Login({onBack}) {
+function Login({onBack, onSignup}) {
     const handleSubmit = event => {
         event.preventDefault();
     };
@@ -23,6 +23,18 @@ function Login({onBack}) {
                         <input type="password" placeholder="비밀번호를 입력하세요" autoComplete="current-password" required/>
                     </label>
                     <button className="login-button" type="submit">로그인</button>
+
+                    <div className="auth-divider" aria-hidden="true">
+                        <span>또는</span>
+                    </div>
+
+                    <button
+                        className="auth-secondary-button"
+                        type="button"
+                        onClick={onSignup}
+                    >
+                        회원가입 페이지로 이동
+                    </button>
                 </form>
             </section>
         </main>

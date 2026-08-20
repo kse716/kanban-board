@@ -5,10 +5,12 @@ import React, {
     useState
 } from 'react';
 import Select, {components} from 'react-select';
-import {Trash2} from 'lucide-react';
+import {Menu, Trash2, X} from 'lucide-react';
 
 import Login from './login';
+import Signup from './signup';
 import ProjectSidebar from './components/ProjectSidebar/ProjectSidebar';
+import StatsDashboard from './components/StatsDashboard';
 import './App.css';
 
 const columns = [
@@ -338,9 +340,13 @@ function App() {
         window.location.pathname
     );
 
-    const [isSidebarCollapsed, setSidebarCollapsed] = useState(
-        () => localStorage.getItem('flow-kanban-sidebar-collapsed') === 'true'
-    );
+    const [isSidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        if (window.matchMedia('(max-width: 900px)').matches) {
+            return true;
+        }
+
+        return localStorage.getItem('flow-kanban-sidebar-collapsed') === 'true';
+    });
 
     const [projects, setProjects] = useState([]);
     const [selectedProjectId, setSelectedProjectId] = useState(null);
@@ -350,6 +356,7 @@ function App() {
     const [tasks, setTasks] = useState([]);
     const [isLoading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [viewMode, setViewMode] = useState('board');
 
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState({
@@ -426,10 +433,54 @@ function App() {
     });
 
     useEffect(() => {
-        localStorage.setItem(
-            'flow-kanban-sidebar-collapsed',
-            String(isSidebarCollapsed)
-        );
+        if (!window.matchMedia('(max-width: 900px)').matches) {
+            localStorage.setItem(
+                'flow-kanban-sidebar-collapsed',
+                String(isSidebarCollapsed)
+            );
+        }
+    }, [isSidebarCollapsed]);
+
+    useEffect(() => {
+        const mobileQuery = window.matchMedia('(max-width: 900px)');
+        const closeSidebarOnMobile = event => {
+            if (event.matches) {
+                setSidebarCollapsed(true);
+            } else {
+                setSidebarCollapsed(
+                    localStorage.getItem('flow-kanban-sidebar-collapsed') === 'true'
+                );
+            }
+        };
+
+        mobileQuery.addEventListener('change', closeSidebarOnMobile);
+
+        return () => {
+            mobileQuery.removeEventListener('change', closeSidebarOnMobile);
+        };
+    }, []);
+
+    useEffect(() => {
+        const isMobile = window.matchMedia('(max-width: 900px)').matches;
+
+        if (!isMobile || isSidebarCollapsed) {
+            return undefined;
+        }
+
+        const previousOverflow = document.body.style.overflow;
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') {
+                setSidebarCollapsed(true);
+            }
+        };
+
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', closeOnEscape);
+        };
     }, [isSidebarCollapsed]);
 
     useEffect(() => {
@@ -623,12 +674,21 @@ function App() {
     ) || null;
 
     const selectProject = projectId => {
-        if (projectId === selectedProjectId) return;
+        if (projectId === selectedProjectId) {
+            if (window.matchMedia('(max-width: 900px)').matches) {
+                setSidebarCollapsed(true);
+            }
+            return;
+        }
 
         closeTaskModal();
         setQuery('');
         setFilters({columns: [], tags: []});
         setSelectedProjectId(projectId);
+
+        if (window.matchMedia('(max-width: 900px)').matches) {
+            setSidebarCollapsed(true);
+        }
     };
 
     const createProject = async name => {
@@ -1571,6 +1631,22 @@ function App() {
                 onBack={() =>
                     navigateTo('/')
                 }
+                onSignup={() =>
+                    navigateTo('/signup')
+                }
+            />
+        );
+    }
+
+    if (page === '/signup') {
+        return (
+            <Signup
+                onBack={() =>
+                    navigateTo('/')
+                }
+                onLogin={() =>
+                    navigateTo('/login')
+                }
             />
         );
     }
@@ -1641,6 +1717,28 @@ function App() {
 
     return (
         <div className={`app-shell ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+            <button
+                className="mobile-sidebar-toggle"
+                type="button"
+                onClick={() => setSidebarCollapsed(current => !current)}
+                aria-controls="project-sidebar"
+                aria-expanded={!isSidebarCollapsed}
+                aria-label={isSidebarCollapsed ? '프로젝트 메뉴 열기' : '프로젝트 메뉴 닫기'}
+            >
+                {isSidebarCollapsed
+                    ? <Menu aria-hidden="true" size={22}/>
+                    : <X aria-hidden="true" size={22}/>
+                }
+            </button>
+
+            <button
+                className="mobile-sidebar-backdrop"
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="프로젝트 메뉴 닫기"
+                tabIndex={isSidebarCollapsed ? -1 : 0}
+            />
+
             <ProjectSidebar
                 user={currentUser}
                 projects={projects}
@@ -1692,7 +1790,24 @@ function App() {
                     </div>
                 </div>
 
-                <div className="toolbar">
+                <div className={`toolbar ${viewMode === 'stats' ? 'stats-view' : ''}`}>
+                    <div className="view-tabs" role="tablist" aria-label="보기 전환">
+                        <button type="button" role="tab"
+                                aria-selected={viewMode === 'board'}
+                                className={viewMode === 'board' ? 'selected' : ''}
+                                onClick={() => setViewMode('board')}>
+                            보드
+                        </button>
+                        <button type="button" role="tab"
+                                aria-selected={viewMode === 'stats'}
+                                className={viewMode === 'stats' ? 'selected' : ''}
+                                onClick={() => setViewMode('stats')}>
+                            통계
+                        </button>
+                    </div>
+
+                    {viewMode === 'board' && (
+                    <div className="toolbar-controls">
                     <label className="board-search">
                         <span aria-hidden="true">
                             ⌕
@@ -1961,8 +2076,10 @@ function App() {
                             </div>
                         )}
                     </div>
+                    </div>)}
                 </div>
 
+                {viewMode === 'board' && (
                 <div className="board">
                     {columns.map(column => {
                         const items =
@@ -2321,6 +2438,11 @@ function App() {
                         );
                     })}
                 </div>
+                )}
+
+                {viewMode === 'stats' && (
+                    <StatsDashboard tasks={tasks}/>
+                )}
             </main>
 
             {isModalOpen && (

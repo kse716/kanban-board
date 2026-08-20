@@ -31,6 +31,11 @@ button {
     grid-template-columns: 84px minmax(0, 1fr);
 }
 
+.mobile-sidebar-toggle,
+.mobile-sidebar-backdrop {
+    display: none;
+}
+
 .workspace-main {
     width: 100%;
     max-width: 1600px;
@@ -503,7 +508,20 @@ main {
 .view-tabs {
     display: flex;
     height: 100%;
-    gap: 20px
+    gap: 20px;
+    justify-content: left;
+}
+
+.toolbar.stats-view .view-tabs {
+    margin-right: auto;
+}
+
+.toolbar-controls {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
 }
 
 .view-tabs button {
@@ -686,6 +704,50 @@ main {
 
     .workspace-main {
         padding: 32px 24px 48px;
+    }
+
+    .mobile-sidebar-toggle {
+        position: fixed;
+        top: 16px;
+        left: min(calc(82vw - 56px), 244px);
+        z-index: 1100;
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        border: 1px solid #e1e4ea;
+        border-radius: 11px;
+        background: #fff;
+        color: #303640;
+        box-shadow: 0 8px 24px rgba(31, 39, 52, .12);
+        transition: left .22s ease, background-color .15s ease;
+    }
+
+    .sidebar-collapsed .mobile-sidebar-toggle {
+        left: 16px;
+    }
+
+    .mobile-sidebar-toggle:hover {
+        background: #f1f3f7;
+        color: #315bea;
+    }
+
+    .mobile-sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 990;
+        display: block;
+        padding: 0;
+        border: 0;
+        background: rgba(24, 29, 38, .38);
+        opacity: 1;
+        transition: opacity .22s ease;
+    }
+
+    .sidebar-collapsed .mobile-sidebar-backdrop {
+        pointer-events: none;
+        opacity: 0;
     }
 }
 
@@ -1474,6 +1536,76 @@ main {
     margin-top: 4px;
 }
 
+.login-form .login-button {
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 11px 16px;
+    background: var(--blue);
+    color: white;
+    box-shadow: 0 4px 10px rgba(49, 91, 234, .18);
+}
+
+.login-form .login-button:hover {
+    background: #254fd8;
+    color: white;
+}
+
+.auth-divider {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a0a5ae;
+    font-size: 10px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    height: 1px;
+    flex: 1;
+    background: #e7e8eb;
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
+.auth-secondary-button {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #dfe2e8;
+    border-radius: 8px;
+    background: white;
+    color: #4f5662;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.auth-secondary-button:hover {
+    border-color: #aeb8e6;
+    background: #f7f8ff;
+    color: #315bea;
+}
+
+.auth-message {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.auth-message.error {
+    background: #fff2f2;
+    color: #bb3d3d;
+}
+
+.auth-message.success {
+    background: #eef8f2;
+    color: #28764d;
+}
+
 .task-tags {
     display: flex;
     flex-wrap: wrap;
@@ -1633,5 +1765,86 @@ main {
     .card-list {
         max-height: none;
         overflow-y: visible;
+    }
+}
+
+/* 모바일 상단 헤더: 메뉴 버튼과 프로젝트 제목이 겹치지 않도록 공간을 분리합니다. */
+@media (max-width: 900px) {
+    .mobile-sidebar-toggle {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .page-heading {
+        position: sticky;
+        top: 0;
+        z-index: 900;
+        min-height: 74px;
+        margin: -28px -24px 28px;
+        padding: 16px 24px 12px 68px;
+        align-items: center;
+        background: rgba(255, 255, 255, .96);
+        backdrop-filter: blur(10px);
+    }
+
+    .page-title-area {
+        min-width: 0;
+    }
+
+    .page-heading h1 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 640px) {
+    .page-heading {
+        min-height: 68px;
+        margin: -22px -16px 24px;
+        padding: 14px 16px 10px 64px;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 900px) {
+    .toolbar {
+        height: auto;
+        align-items: stretch;
+        flex-wrap: wrap;
+        padding-bottom: 12px;
+    }
+
+    .view-tabs {
+        order: 1;
+        flex: 0 0 100%;
+        height: 40px;
+        justify-content: flex-start;
+    }
+
+    .toolbar-controls {
+        order: 2;
+        display: flex;
+        align-items: center;
+        flex: 0 0 100%;
+        min-width: 0;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .toolbar-controls .board-search {
+        order: initial;
+        flex: 1 1 auto;
+        flex-basis: auto;
+        width: auto;
+        min-width: 0;
+        margin-right: 0;
+    }
+
+    .toolbar-controls .filters,
+    .toolbar-controls .sort-control {
+        order: initial;
+        flex: 0 0 auto;
     }
 }
