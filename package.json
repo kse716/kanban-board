@@ -5,5 +5,10 @@
   "proxy": "http://localhost:8080",
   "dependencies": {
     "react-router-dom": "^7.18.2"
+  },
+  "homepage": "https://kse716.github.io/kanban-board/",
+  "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   }
 }
